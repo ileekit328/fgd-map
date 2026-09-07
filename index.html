@@ -80,7 +80,7 @@
         <div style="font-weight:bold; margin-bottom:10px; color:#555;">👁️ 顯示圖層：</div>
         <label><input type="checkbox" class="layer-filter" value="Defect" checked onchange="loadDefects()"> 🔴 缺陷 (Defect)</label>
         <label><input type="checkbox" class="layer-filter" value="Job" checked onchange="loadDefects()"> 🔵 任務 (Daily Job)</label>
-        <label><input type="checkbox" class="layer-filter" value="Inspection" checked onchange="loadDefects()"> 🟣 檢驗 (Inspection)</label>
+        <label><input type="checkbox" class="layer-filter" value="Inspection" checked onchange="loadDefects()"> 🟣 完整性Report (Integrity Report)</label>
     </div>
 
     <!-- 按鈕 -->
@@ -96,7 +96,7 @@
             <select id="jobType">
                 <option value="Defect">🔴 缺陷 (Defect)</option>
                 <option value="Job">🔵 任務 (Daily Job)</option>
-                <option value="Inspection">🟣 檢驗 / 起重 (Inspection)</option>
+                <option value="Inspection">🟣 完整性Report (Integrity Report)</option>
             </select>
 
             <input type="text" id="eqName" placeholder="設備 (例如: LTT Sump Pump)" autocomplete="off">
@@ -165,7 +165,7 @@
                     typeTag = '<span class="tag" style="background:#34c759;">✔️ 已完工</span>';
                 } else {
                     if (jobType === 'Job') { icon = bluePinIcon; typeTag = '<span class="tag" style="background:#007aff;">🔵 當天任務</span>'; }
-                    else if (jobType === 'Inspection') { icon = purplePinIcon; typeTag = '<span class="tag" style="background:#af52de;">🟣 檢驗紀錄</span>'; }
+                    else if (jobType === 'Inspection') { icon = purplePinIcon; typeTag = '<span class="tag" style="background:#af52de;">🟣 Integrity Report</span>'; }
                     else { icon = redPinIcon; typeTag = '<span class="tag" style="background:#ff3b30;">🔴 缺陷</span>'; }
                 }
 
