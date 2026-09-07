@@ -234,9 +234,10 @@
         }).setView([22.3755, 113.9210], 17);
 
         // 載入 OpenStreetMap 底圖
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '&copy; OpenStreetMap contributors'
+// 載入 Google 衛星混合底圖 (包含衛星圖 + 少量地標文字)
+        L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+            maxZoom: 21, // 衛星圖解像度極高，可以俾你 Zoom 得再近啲
+            attribution: '&copy; Google'
         }).addTo(map);
 
         // 定義純 CSS 標記圖示 (完全不依賴外部網絡，即開即顯)
