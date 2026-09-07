@@ -46,7 +46,10 @@
         .popup-card { min-width: 210px; font-size: 14px; }
         .popup-card h4 { margin: 0 0 6px 0; font-size: 16px; color: #000; }
         .popup-card img { width: 100%; max-height: 180px; object-fit: cover; border-radius: 8px; margin: 8px 0; border: 1px solid #eee; }
-        .btn-mark-done { width: 100%; background: #34c759; color: white; border: none; padding: 8px 0; border-radius: 6px; font-weight: 600; margin-top: 6px; }
+        
+        /* Popup 內按鈕樣式 */
+        .btn-mark-done { width: 100%; background: #34c759; color: white; border: none; padding: 8px 0; border-radius: 6px; font-weight: 600; margin-top: 6px; cursor: pointer; }
+        .btn-delete-job { width: 100%; background: #ff3b30; color: white; border: none; padding: 8px 0; border-radius: 6px; font-weight: 600; margin-top: 6px; cursor: pointer; }
 
         /* 自訂純 CSS Pin */
         .custom-pin { width: 24px; height: 24px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); margin-top: -24px; margin-left: -12px; border: 2px solid #ffffff; box-shadow: 0 2px 5px rgba(0,0,0,0.4); }
@@ -59,17 +62,14 @@
     <div id="map"></div>
     <div class="crosshair"></div>
 
-    <!-- 附近雷達提示板 -->
     <div id="nearbyPanel" class="nearby-panel">
         <h4>⚠️ 附近 30 米有未完工項目：</h4>
         <ul id="nearbyList"></ul>
     </div>
 
-    <!-- 按鈕 -->
     <button class="settings-btn" onclick="document.getElementById('settingsModal').style.display='flex'">⚙️</button>
     <button class="add-btn" onclick="document.getElementById('addModal').style.display='flex'">➕ 新增 Defect</button>
 
-    <!-- 新增 Defect 表單 -->
     <div class="modal" id="addModal">
         <div class="modal-content">
             <h3>報告新 Defect</h3>
@@ -83,7 +83,6 @@
         </div>
     </div>
 
-    <!-- 設定 & 資料匯出匯入表單 -->
     <div class="modal" id="settingsModal">
         <div class="modal-content">
             <h3>資料管理 (跨裝置)</h3>
@@ -103,14 +102,21 @@
     <script>
         localforage.config({ name: 'FGD_Plant_DB', storeName: 'defects_store' });
 
-        var map = L.map('map', { zoomControl: false, rotate: true, bearing: 72, rotateControl: { closeOnZeroBearing: false } }).setView([22.3755, 113.9210], 18);
+        // 設定地圖：加入 297 度實測視角
+        var map = L.map('map', { 
+            zoomControl: false, 
+            rotate: true, 
+            bearing: 297, 
+            rotateControl: { closeOnZeroBearing: false } 
+        }).setView([22.3755, 113.9210], 18);
+        
         L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxZoom: 21, attribution: '&copy; Google' }).addTo(map);
 
         var redPinIcon = L.divIcon({ className: '', html: '<div class="custom-pin pin-red"></div>', iconSize: [24,24], iconAnchor: [12,24], popupAnchor: [0,-26] });
         var greenPinIcon = L.divIcon({ className: '', html: '<div class="custom-pin pin-green"></div>', iconSize: [24,24], iconAnchor: [12,24], popupAnchor: [0,-26] });
         var markersGroup = L.layerGroup().addTo(map);
 
-        var allDefectsCache = []; // 裝住所有資料，方便 GPS 計算距離
+        var allDefectsCache = []; 
 
         // 讀取並渲染 Defect
         async function loadDefects() {
@@ -122,9 +128,13 @@
                 var isClosed = (job.status === 'Closed');
                 var icon = isClosed ? greenPinIcon : redPinIcon;
                 var photoHtml = job.photo ? '<img src="' + job.photo + '">' : '';
+                
                 var statusHtml = isClosed ? '<p style="color:#34c759; font-weight:bold;">已完工</p>' : '<button class="btn-mark-done" onclick="window.markAsDone(\'' + job.id + '\')">✅ Mark as Closed</button>';
+                
+                // 加入刪除掣 HTML
+                var deleteHtml = '<button class="btn-delete-job" onclick="window.deleteJob(\'' + job.id + '\')">🗑️ 徹底刪除</button>';
 
-                var content = '<div class="popup-card"><h4>' + escapeHtml(job.eq) + '</h4><p style="margin:0;"><b>問題:</b> ' + escapeHtml(job.issue) + '</p>' + photoHtml + statusHtml + '</div>';
+                var content = '<div class="popup-card"><h4>' + escapeHtml(job.eq) + '</h4><p style="margin:0;"><b>問題:</b> ' + escapeHtml(job.issue) + '</p>' + photoHtml + statusHtml + deleteHtml + '</div>';
                 L.marker([job.lat, job.lng], { icon: icon }).bindPopup(content).addTo(markersGroup);
             });
         }
@@ -171,12 +181,25 @@
             loadDefects();
         }
 
-        // 更新狀態
+        // 更新狀態為已完工
         window.markAsDone = async function(jobId) {
             if (!confirm("確定標記為已完工？")) return;
             for (var i = 0; i < allDefectsCache.length; i++) {
                 if (allDefectsCache[i].id === jobId) { allDefectsCache[i].status = 'Closed'; break; }
             }
+            await localforage.setItem('defectsList', allDefectsCache);
+            map.closePopup();
+            loadDefects();
+        };
+
+        // 徹底刪除紀錄 (Delete 功能)
+        window.deleteJob = async function(jobId) {
+            if (!confirm("⚠️ 確定要徹底刪除呢個紀錄？(刪除後無法復原)")) return;
+            
+            allDefectsCache = allDefectsCache.filter(function(job) {
+                return job.id !== jobId;
+            });
+            
             await localforage.setItem('defectsList', allDefectsCache);
             map.closePopup();
             loadDefects();
@@ -194,7 +217,7 @@
             var url = URL.createObjectURL(blob);
             var a = document.createElement('a');
             a.href = url;
-            a.download = 'FGD_Defects_Backup.json'; // 下載的檔案名稱
+            a.download = 'FGD_Defects_Backup.json';
             a.click();
             URL.revokeObjectURL(url);
             alert("✅ 匯出成功！檔案已儲存。");
@@ -226,28 +249,25 @@
         map.locate({ setView: false, watch: true, enableHighAccuracy: true });
         
         map.on('locationfound', function(e) {
-            // 更新自己位置嘅藍色點
             if (!userPosMarker) {
                 userPosMarker = L.circleMarker(e.latlng, { color: '#007aff', fillColor: '#5ac8fa', fillOpacity: 0.9, radius: 7 }).addTo(map);
             } else {
                 userPosMarker.setLatLng(e.latlng);
             }
 
-            // --- 附近雷達邏輯 (距離 30 米內) ---
             var nearbyRadius = 30; // 30 米範圍
             var nearbyJobs = [];
 
             allDefectsCache.forEach(function(job) {
                 if (job.status === 'Open') {
                     var jobLatLng = L.latLng(job.lat, job.lng);
-                    var distance = map.distance(e.latlng, jobLatLng); // 計算你同 Defect 嘅物理距離 (米)
+                    var distance = map.distance(e.latlng, jobLatLng); 
                     if (distance <= nearbyRadius) {
                         nearbyJobs.push(job.eq + " (" + Math.round(distance) + "米)");
                     }
                 }
             });
 
-            // 更新 UI 提示板
             var panel = document.getElementById('nearbyPanel');
             var listUI = document.getElementById('nearbyList');
             if (nearbyJobs.length > 0) {
