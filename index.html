@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
-
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-rotate@0.2.8/dist/leaflet-rotate.min.js"></script>
     <style>
         body, html {
             margin: 0;
@@ -232,6 +232,11 @@
         // 2. 初始化地圖 (預設青山發電廠大約坐標)
         var map = L.map('map', {
             zoomControl: false
+            rotate: true,       // 啟動旋轉功能
+            bearing: 72,        // 鎖定 72 度 (向東偏北)
+            rotateControl: {
+                closeOnZeroBearing: false
+            }
         }).setView([22.3755, 113.9210], 17);
 
         // 載入 OpenStreetMap 底圖
