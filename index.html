@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <!-- PWA 手機全螢幕設定 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>FGD Defect Radar</title>
+
+    <!-- 載入 Leaflet.js (地圖) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- 載入 LocalForage.js (手機無限制容量 Database) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #000; }
+        
+        #map { width: 100vw; height: 100vh; z-index: 1; }
+        
+        /* 畫面正中間嘅十字準星 (用嚟精準落 Pin) */
+        .crosshair {
+            position: absolute; top: 50%; left: 50%;
+            width: 20px; height: 20px;
+            margin-top: -10px; margin-left: -10px;
+            background: transparent;
+            border: 2px solid rgba(255, 0, 0, 0.7);
+            border-radius: 50%; pointer-events: none; z-index: 10;
+        }
+        .crosshair::after, .crosshair::before {
+            content: ''; position: absolute; background: red;
+        }
+        .crosshair::before { top: 9px; left: -5px; width: 30px; height: 2px; }
+        .crosshair::after { top: -5px; left: 9px; width: 2px; height: 30px; }
+
+        /* 浮動按鈕 UI */
+        .add-btn {
+            position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+            padding: 15px 30px; background: #007aff; color: white; border: none;
+            border-radius: 30px; font-size: 18px; font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3); z-index: 1000; cursor: pointer;
+        }
+
+        /* 隱藏表單 (Modal) UI */
+        .modal {
+            display: none; position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.6); z-index: 2000; justify-content: center; align-items: center;
+        }
+        .modal-content {
+            background: white; padding: 25px; border-radius: 15px; width: 85%; max-width: 350px;
+        }
+        .modal-content input, .modal-content select {
+            width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc;
+            border-radius: 8px; font-size: 16px; box-sizing: border-box;
+        }
+        .btn-group { display: flex; justify-content: space-between; }
+        .btn-save { background: #28a745; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-size: 16px; width: 48%; }
+        .btn-cancel { background: #dc3545; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-size: 16px; width: 48%; }
+        
+        .popup-img { width: 100%; border-radius: 8px; margin-top: 10px; }
+        .btn-close-job { background: #28a745; color: white; border: none; padding: 8px; border-radius: 5px; margin-top: 10px; cursor: pointer; width: 100%; }
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+    <div class="crosshair"></div> <!-- 畫面中間嘅瞄準器 -->
+    
+    <button class="add-btn" onclick="openForm()">➕ 新增 Defect</button>
+
+    <!-- 輸入表單 Modal -->
+    <div class="modal" id="addModal">
+        <div class="modal-content">
+            <h2 style="margin-top: 0;">報告新 Defect</h2>
+            <input type="text" id="eqName" placeholder="設備 (例如: LTT Sump Pump)">
+            <input type="text" id="issueDesc" placeholder="咩事 (例如: Coupling 爛、換雪油)">
+            <!-- 呢行 capture="environment" 會喺 iPhone 自動開機背相機 -->
+            <input type="file" id="photoInput" accept="image/*" capture="environment">
+            
+            <div class="btn-group">
+                <button class="btn-cancel" onclick="closeForm()">取消</button>
+                <button class="btn-save" onclick="saveJob()">儲存 & 落 Pin</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. 初始化設定 ---
+        localforage.config({ name: 'FGD_App', storeName: 'defects_data' });
+        
+        // 預設廠房坐標 (青山發電廠大約位置)，預設 Zoom Level 開到最大
+        var map = L.map('map').setView([22.3755, 113.9210], 17);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+
+        // Icon 設定
+        var redIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34] });
+        var greenIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34] });
+
+        var markersLayer = L.layerGroup().addTo(map); // 用嚟裝住所有 Pin，方便重畫
+
+        // --- 2. 載入並顯示所有 Defect ---
+        async function loadDefects() {
+            markersLayer.clearLayers(); // 清除舊 Pin
+            let defects = await localforage.getItem('defectsList') || [];
+            
+            defects.forEach(job => {
+                let icon = job.status === 'Open' ? redIcon : greenIcon;
+                
+                // Popup HTML
+                let photoHTML = job.photo ? <img src="${job.photo}" class="popup-img"> : '';
+                let actionHTML = job.status === 'Open' 
+                    ? <button class="btn-close-job" onclick="window.markClosed('${job.id}')">✅ Mark as Closed (完工)</button>
+                    : <b><span style="color:green;">已完工</span></b>;
+
+                let popupContent = `
+                    <div style="min-width: 200px;">
+                        <h3 style="margin:0 0 5px 0;">${job.eq}</h3>
+                        <p style="margin:0;"><b>問題:</b> ${job.issue}</p>
+                        ${photoHTML}
+                        ${actionHTML}
+                    </div>
+                `;
+
+                L.marker([job.lat, job.lng], {icon: icon})
+                 .bindPopup(popupContent)
+                 .addTo(markersLayer);
+            });
+        }
+
+        // 網頁一開就 Load Data
+        loadDefects();
+
+        // --- 3. 處理表單 UI ---
+        function openForm() { document.getElementById('addModal').style.display = 'flex'; }
+        function closeForm() {
+            document.getElementById('addModal').style.display = 'none';
+            document.getElementById('eqName').value = '';
+            document.getElementById('issueDesc').value = '';
+            document.getElementById('photoInput').value = '';
+        }
+
+        // --- 4. 核心：將大相片壓縮 (防止 iPhone 爆 Cache) ---
+        function compressPhoto(file) {
+            return new Promise((resolve) => {
+                if (!file) { resolve(null); return; }
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.src = event.target.result;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 500; // 壓縮到 500px 闊
+                        const scale = MAX_WIDTH / img.width;
+                        canvas.width = MAX_WIDTH;
+                        canvas.height = img.height * scale;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.6)); // 60% 品質 JPEG
+                    };
+                };
+            });
+        }
+
+        // --- 5. 儲存新 Job ---
+        async function saveJob() {
+            let eq = document.getElementById('eqName').value;
+            let issue = document.getElementById('issueDesc').value;
+            let fileInput = document.getElementById('photoInput');
+            
+            if (!eq || !issue) { alert("請填寫設備同問題！"); return; }
+
+            // 攞地圖正中心嘅坐標 (即係十字準星指住嘅位)
+            let center = map.getCenter();
+            
+            // 壓縮相片
+            let compressedPhotoBase64 = await compressPhoto(fileInput.files[0]);
+
+            let newJob = {
+                id: 'job_' + Date.now(), // 用時間做唯一 ID
+                eq: eq,
+                issue: issue,
+                lat: center.lat,
+                lng: center.lng,
+                photo: compressedPhotoBase64,
+                status: 'Open'
+            };
+
+            // Save 落 Database
+            let defects = await localforage.getItem('defectsList') || [];
+            defects.push(newJob);
+            await localforage.setItem('defectsList', defects);
+
+            closeForm();
+            loadDefects(); // 重新畫圖
+        }
+
+        // --- 6. 更新狀態 (Mark as Closed) ---
+        window.markClosed = async function(jobId) {
+            if(!confirm("確定呢單 Job 已經搞掂？")) return;
+            
+            let defects = await localforage.getItem('defectsList') || [];
+            let jobIndex = defects.findIndex(j => j.id === jobId);
+            
+            if(jobIndex !== -1) {
+                defects[jobIndex].status = 'Closed';
+                await localforage.setItem('defectsList', defects);
+                loadDefects(); // 重新畫圖，粒 Pin 會轉做綠色
+                map.closePopup();
+            }
+        };
+
+        // 開啟 GPS 追蹤 (如果有權限)
+        map.locate({setView: false, watch: true, enableHighAccuracy: true});
+        var myLocationMarker;
+        map.on('locationfound', function(e) {
+            if (!myLocationMarker) {
+                myLocationMarker = L.circleMarker(e.latlng, {color: 'blue', radius: 5}).addTo(map);
+            } else {
+                myLocationMarker.setLatLng(e.latlng);
+            }
+        });
+    </script>
+</body>
+</html>
