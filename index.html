@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-<meta name="mobile-web-app-capable" content="yes">
 <html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
@@ -13,190 +12,44 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/leaflet-rotate@0.2.8/dist/leaflet-rotate.min.js"></script>
+
     <style>
-        body, html {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            width: 100%;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #1a1a1a;
-            overflow: hidden;
-        }
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #1a1a1a; overflow: hidden; }
+        #map { width: 100vw; height: 100vh; z-index: 1; }
 
-        #map {
-            width: 100vw;
-            height: 100vh;
-            z-index: 1;
-        }
+        /* 中央十字準星 */
+        .crosshair { position: absolute; top: 50%; left: 50%; width: 24px; height: 24px; margin-top: -12px; margin-left: -12px; background: transparent; border: 2px solid rgba(255, 59, 48, 0.85); border-radius: 50%; pointer-events: none; z-index: 1000; box-sizing: border-box; }
+        .crosshair::before { content: ''; position: absolute; top: 10px; left: -8px; width: 36px; height: 2px; background: rgba(255, 59, 48, 0.85); }
+        .crosshair::after { content: ''; position: absolute; top: -8px; left: 10px; width: 2px; height: 36px; background: rgba(255, 59, 48, 0.85); }
 
-        /* 畫面中央十字準星 */
-        .crosshair {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 24px;
-            height: 24px;
-            margin-top: -12px;
-            margin-left: -12px;
-            background: transparent;
-            border: 2px solid rgba(255, 59, 48, 0.85);
-            border-radius: 50%;
-            pointer-events: none;
-            z-index: 1000;
-            box-sizing: border-box;
-        }
-        .crosshair::before {
-            content: '';
-            position: absolute;
-            top: 10px;
-            left: -8px;
-            width: 36px;
-            height: 2px;
-            background: rgba(255, 59, 48, 0.85);
-        }
-        .crosshair::after {
-            content: '';
-            position: absolute;
-            top: -8px;
-            left: 10px;
-            width: 2px;
-            height: 36px;
-            background: rgba(255, 59, 48, 0.85);
-        }
+        /* UI 按鈕 */
+        .add-btn { position: absolute; bottom: 35px; left: 50%; transform: translateX(-50%); padding: 14px 28px; background: #007aff; color: white; border: none; border-radius: 30px; font-size: 17px; font-weight: 600; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4); z-index: 1000; cursor: pointer; }
+        .settings-btn { position: absolute; top: 20px; right: 20px; background: white; border: none; border-radius: 50%; width: 44px; height: 44px; font-size: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); z-index: 1000; cursor: pointer; display: flex; justify-content: center; align-items: center; }
+        
+        /* 附近雷達提示板 (LBS) */
+        .nearby-panel { position: absolute; top: 20px; left: 20px; background: rgba(255, 255, 255, 0.95); padding: 12px 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 1000; max-width: 60%; display: none; border-left: 5px solid #ff3b30; }
+        .nearby-panel h4 { margin: 0 0 5px 0; font-size: 15px; color: #ff3b30; }
+        .nearby-panel ul { margin: 0; padding-left: 20px; font-size: 13px; color: #333; }
 
-        /* 浮動按鈕 */
-        .add-btn {
-            position: absolute;
-            bottom: 35px;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 14px 28px;
-            background: #007aff;
-            color: white;
-            border: none;
-            border-radius: 30px;
-            font-size: 17px;
-            font-weight: 600;
-            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
-            z-index: 1000;
-            cursor: pointer;
-            -webkit-tap-highlight-color: transparent;
-        }
-        .add-btn:active {
-            background: #0056b3;
-        }
+        /* Modal 通用 */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.65); z-index: 2000; justify-content: center; align-items: center; }
+        .modal-content { background: #ffffff; padding: 22px; border-radius: 16px; width: 85%; max-width: 340px; box-sizing: border-box; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3); }
+        .modal-content h3 { margin: 0 0 16px 0; font-size: 20px; color: #111; }
+        
+        /* Form 元素 */
+        input[type="text"], input[type="file"] { width: 100%; padding: 12px; margin-bottom: 12px; border: 1px solid #d1d1d6; border-radius: 10px; font-size: 15px; box-sizing: border-box; }
+        .btn-group { display: flex; gap: 10px; }
+        .btn-save, .btn-action { flex: 1; background: #34c759; color: white; border: none; padding: 12px; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; }
+        .btn-cancel { flex: 1; background: #8e8e93; color: white; border: none; padding: 12px; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; }
 
-        /* 輸入表單彈窗 (Modal) */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: rgba(0, 0, 0, 0.65);
-            z-index: 2000;
-            justify-content: center;
-            align-items: center;
-        }
-        .modal-content {
-            background: #ffffff;
-            padding: 22px;
-            border-radius: 16px;
-            width: 85%;
-            max-width: 340px;
-            box-sizing: border-box;
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
-        }
-        .modal-content h3 {
-            margin: 0 0 16px 0;
-            font-size: 20px;
-            color: #111;
-        }
-        .modal-content input[type="text"] {
-            width: 100%;
-            padding: 12px;
-            margin-bottom: 12px;
-            border: 1px solid #d1d1d6;
-            border-radius: 10px;
-            font-size: 15px;
-            box-sizing: border-box;
-            outline: none;
-        }
-        .modal-content input[type="file"] {
-            width: 100%;
-            margin-bottom: 16px;
-            font-size: 14px;
-        }
-        .btn-group {
-            display: flex;
-            gap: 10px;
-        }
-        .btn-save {
-            flex: 1;
-            background: #34c759;
-            color: white;
-            border: none;
-            padding: 12px;
-            border-radius: 10px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-        }
-        .btn-cancel {
-            flex: 1;
-            background: #8e8e93;
-            color: white;
-            border: none;
-            padding: 12px;
-            border-radius: 10px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-        }
+        /* Popup 卡片 */
+        .popup-card { min-width: 210px; font-size: 14px; }
+        .popup-card h4 { margin: 0 0 6px 0; font-size: 16px; color: #000; }
+        .popup-card img { width: 100%; max-height: 180px; object-fit: cover; border-radius: 8px; margin: 8px 0; border: 1px solid #eee; }
+        .btn-mark-done { width: 100%; background: #34c759; color: white; border: none; padding: 8px 0; border-radius: 6px; font-weight: 600; margin-top: 6px; }
 
-        /* 地圖 Popup 樣式 */
-        .popup-card {
-            min-width: 210px;
-            font-size: 14px;
-        }
-        .popup-card h4 {
-            margin: 0 0 6px 0;
-            font-size: 16px;
-            color: #000;
-        }
-        .popup-card img {
-            width: 100%;
-            max-height: 180px;
-            object-fit: cover;
-            border-radius: 8px;
-            margin: 8px 0;
-            border: 1px solid #eee;
-        }
-        .btn-mark-done {
-            width: 100%;
-            background: #34c759;
-            color: white;
-            border: none;
-            padding: 8px 0;
-            border-radius: 6px;
-            font-weight: 600;
-            cursor: pointer;
-            margin-top: 6px;
-        }
-
-        /* 自訂純 CSS Pin (零網絡依賴) */
-        .custom-pin {
-            width: 24px;
-            height: 24px;
-            border-radius: 50% 50% 50% 0;
-            transform: rotate(-45deg);
-            margin-top: -24px;
-            margin-left: -12px;
-            border: 2px solid #ffffff;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.4);
-        }
+        /* 自訂純 CSS Pin */
+        .custom-pin { width: 24px; height: 24px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); margin-top: -24px; margin-left: -12px; border: 2px solid #ffffff; box-shadow: 0 2px 5px rgba(0,0,0,0.4); }
         .pin-red { background: #ff3b30; }
         .pin-green { background: #34c759; }
     </style>
@@ -206,122 +59,80 @@
     <div id="map"></div>
     <div class="crosshair"></div>
 
-    <button class="add-btn" onclick="openForm()">➕ 新增 Defect</button>
+    <!-- 附近雷達提示板 -->
+    <div id="nearbyPanel" class="nearby-panel">
+        <h4>⚠️ 附近 30 米有未完工項目：</h4>
+        <ul id="nearbyList"></ul>
+    </div>
 
+    <!-- 按鈕 -->
+    <button class="settings-btn" onclick="document.getElementById('settingsModal').style.display='flex'">⚙️</button>
+    <button class="add-btn" onclick="document.getElementById('addModal').style.display='flex'">➕ 新增 Defect</button>
+
+    <!-- 新增 Defect 表單 -->
     <div class="modal" id="addModal">
         <div class="modal-content">
             <h3>報告新 Defect</h3>
             <input type="text" id="eqName" placeholder="設備 (例如: LTT Sump Pump)" autocomplete="off">
             <input type="text" id="issueDesc" placeholder="問題 (例如: 漏油、換雪油)" autocomplete="off">
             <input type="file" id="photoInput" accept="image/*" capture="environment">
-
             <div class="btn-group">
-                <button type="button" class="btn-cancel" onclick="closeForm()">取消</button>
+                <button type="button" class="btn-cancel" onclick="document.getElementById('addModal').style.display='none'">取消</button>
                 <button type="button" class="btn-save" onclick="saveJob()">儲存 & 落 Pin</button>
             </div>
         </div>
     </div>
 
+    <!-- 設定 & 資料匯出匯入表單 -->
+    <div class="modal" id="settingsModal">
+        <div class="modal-content">
+            <h3>資料管理 (跨裝置)</h3>
+            <p style="font-size: 13px; color: #666; margin-bottom: 15px;">你可以匯出資料備份，或者喺另一部機匯入 json 檔案。</p>
+            <button type="button" class="btn-action" onclick="exportData()" style="background:#007aff; width:100%; margin-bottom:15px;">📥 匯出資料 (Export)</button>
+            
+            <div style="border-top: 1px solid #eee; margin: 15px 0;"></div>
+            
+            <p style="font-size: 13px; font-weight: bold; margin-bottom: 5px;">📤 匯入資料 (Import)</p>
+            <input type="file" id="importInput" accept=".json" style="font-size:12px;">
+            <button type="button" class="btn-action" onclick="importData()" style="background:#ff9500; width:100%; margin-bottom:15px;">覆蓋並匯入</button>
+            
+            <button type="button" class="btn-cancel" onclick="document.getElementById('settingsModal').style.display='none'" style="width:100%;">關閉</button>
+        </div>
+    </div>
+
     <script>
-        // 1. 初始化本地資料庫
-        localforage.config({
-            name: 'FGD_Plant_DB',
-            storeName: 'defects_store'
-        });
+        localforage.config({ name: 'FGD_Plant_DB', storeName: 'defects_store' });
 
-        // 2. 初始化地圖 (預設青山發電廠大約坐標)
-        var map = L.map('map', {
-            zoomControl: false,
-            rotate: true,       // 啟動旋轉功能
-            bearing: 297,        // 鎖定 72 度 (向東偏北)
-            rotateControl: {
-                closeOnZeroBearing: false
-            }
-        }).setView([22.3755, 113.9210], 17);
+        var map = L.map('map', { zoomControl: false, rotate: true, bearing: 72, rotateControl: { closeOnZeroBearing: false } }).setView([22.3755, 113.9210], 18);
+        L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxZoom: 21, attribution: '&copy; Google' }).addTo(map);
 
-        // 載入 OpenStreetMap 底圖
-// 載入 Google 衛星混合底圖 (包含衛星圖 + 少量地標文字)
-        L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
-            maxZoom: 21, // 衛星圖解像度極高，可以俾你 Zoom 得再近啲
-            attribution: '&copy; Google'
-        }).addTo(map);
-
-        // 定義純 CSS 標記圖示 (完全不依賴外部網絡，即開即顯)
-        var redPinIcon = L.divIcon({
-            className: '',
-            html: '<div class="custom-pin pin-red"></div>',
-            iconSize: [24, 24],
-            iconAnchor: [12, 24],
-            popupAnchor: [0, -26]
-        });
-
-        var greenPinIcon = L.divIcon({
-            className: '',
-            html: '<div class="custom-pin pin-green"></div>',
-            iconSize: [24, 24],
-            iconAnchor: [12, 24],
-            popupAnchor: [0, -26]
-        });
-
+        var redPinIcon = L.divIcon({ className: '', html: '<div class="custom-pin pin-red"></div>', iconSize: [24,24], iconAnchor: [12,24], popupAnchor: [0,-26] });
+        var greenPinIcon = L.divIcon({ className: '', html: '<div class="custom-pin pin-green"></div>', iconSize: [24,24], iconAnchor: [12,24], popupAnchor: [0,-26] });
         var markersGroup = L.layerGroup().addTo(map);
 
-        // 3. 讀取並渲染所有 Defect (全採用標準字串拼接)
+        var allDefectsCache = []; // 裝住所有資料，方便 GPS 計算距離
+
+        // 讀取並渲染 Defect
         async function loadDefects() {
-            try {
-                markersGroup.clearLayers();
-                var list = await localforage.getItem('defectsList');
-                if (!list) list = [];
+            markersGroup.clearLayers();
+            var list = await localforage.getItem('defectsList');
+            allDefectsCache = list || [];
 
-                list.forEach(function(job) {
-                    var isClosed = (job.status === 'Closed');
-                    var icon = isClosed ? greenPinIcon : redPinIcon;
+            allDefectsCache.forEach(function(job) {
+                var isClosed = (job.status === 'Closed');
+                var icon = isClosed ? greenPinIcon : redPinIcon;
+                var photoHtml = job.photo ? '<img src="' + job.photo + '">' : '';
+                var statusHtml = isClosed ? '<p style="color:#34c759; font-weight:bold;">已完工</p>' : '<button class="btn-mark-done" onclick="window.markAsDone(\'' + job.id + '\')">✅ Mark as Closed</button>';
 
-                    var photoHtml = '';
-                    if (job.photo) {
-                        photoHtml = '<img src="' + job.photo + '" alt="Defect Photo">';
-                    }
-
-                    var statusHtml = '';
-                    if (isClosed) {
-                        statusHtml = '<p style="margin:4px 0 0 0; color:#34c759; font-weight:bold;">狀態: 已完工 (Closed)</p>';
-                    } else {
-                        statusHtml = '<button class="btn-mark-done" onclick="window.markAsDone(\'' + job.id + '\')">✅ Mark as Closed (完工)</button>';
-                    }
-
-                    var content = '<div class="popup-card">' +
-                                  '<h4>' + escapeHtml(job.eq) + '</h4>' +
-                                  '<p style="margin:0; color:#444;"><b>問題:</b> ' + escapeHtml(job.issue) + '</p>' +
-                                  photoHtml +
-                                  statusHtml +
-                                  '</div>';
-
-                    L.marker([job.lat, job.lng], { icon: icon })
-                        .bindPopup(content)
-                        .addTo(markersGroup);
-                });
-            } catch (err) {
-                console.error("讀取 Defect 失敗:", err);
-            }
+                var content = '<div class="popup-card"><h4>' + escapeHtml(job.eq) + '</h4><p style="margin:0;"><b>問題:</b> ' + escapeHtml(job.issue) + '</p>' + photoHtml + statusHtml + '</div>';
+                L.marker([job.lat, job.lng], { icon: icon }).bindPopup(content).addTo(markersGroup);
+            });
         }
 
-        // 4. 表單控制
-        function openForm() {
-            document.getElementById('addModal').style.display = 'flex';
-        }
-        function closeForm() {
-            document.getElementById('addModal').style.display = 'none';
-            document.getElementById('eqName').value = '';
-            document.getElementById('issueDesc').value = '';
-            document.getElementById('photoInput').value = '';
-        }
-
-        // 5. 相片安全壓縮 (轉成細容量 JPEG，避免手機儲存超載)
+        // 相片壓縮
         function compressPhoto(file) {
             return new Promise(function(resolve) {
-                if (!file) {
-                    resolve(null);
-                    return;
-                }
+                if (!file) return resolve(null);
                 var reader = new FileReader();
                 reader.readAsDataURL(file);
                 reader.onload = function(e) {
@@ -329,131 +140,129 @@
                     img.src = e.target.result;
                     img.onload = function() {
                         var canvas = document.createElement('canvas');
-                        var maxDim = 600; // 最長邊限制在 600px 內
-                        var width = img.width;
-                        var height = img.height;
-
-                        if (width > height) {
-                            if (width > maxDim) {
-                                height = Math.round((height * maxDim) / width);
-                                width = maxDim;
-                            }
-                        } else {
-                            if (height > maxDim) {
-                                width = Math.round((width * maxDim) / height);
-                                height = maxDim;
-                            }
-                        }
-
-                        canvas.width = width;
-                        canvas.height = height;
-                        var ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0, width, height);
+                        var max = 600; var w = img.width; var h = img.height;
+                        if (w > h) { if (w > max) { h = Math.round(h * max / w); w = max; } } 
+                        else { if (h > max) { w = Math.round(w * max / h); h = max; } }
+                        canvas.width = w; canvas.height = h;
+                        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
                         resolve(canvas.toDataURL('image/jpeg', 0.65));
                     };
-                    img.onerror = function() {
-                        resolve(null);
-                    };
-                };
-                reader.onerror = function() {
-                    resolve(null);
                 };
             });
         }
 
-        // 6. 儲存新 Job
+        // 儲存新 Job
         async function saveJob() {
             var eq = document.getElementById('eqName').value.trim();
             var issue = document.getElementById('issueDesc').value.trim();
             var fileInput = document.getElementById('photoInput');
-
-            if (!eq || !issue) {
-                alert("請填寫「設備」同埋「問題」！");
-                return;
-            }
+            if (!eq || !issue) { alert("請填寫設備及問題！"); return; }
 
             var center = map.getCenter();
             var photoData = null;
+            if (fileInput.files && fileInput.files[0]) photoData = await compressPhoto(fileInput.files[0]);
 
-            if (fileInput.files && fileInput.files[0]) {
-                photoData = await compressPhoto(fileInput.files[0]);
-            }
-
-            var newJob = {
-                id: 'job_' + Date.now(),
-                eq: eq,
-                issue: issue,
-                lat: center.lat,
-                lng: center.lng,
-                photo: photoData,
-                status: 'Open',
-                createdAt: new Date().toISOString()
-            };
-
-            try {
-                var list = await localforage.getItem('defectsList');
-                if (!list) list = [];
-                list.push(newJob);
-                await localforage.setItem('defectsList', list);
-
-                closeForm();
-                await loadDefects();
-            } catch (err) {
-                alert("儲存失敗: " + err.message);
-            }
+            var newJob = { id: 'job_' + Date.now(), eq: eq, issue: issue, lat: center.lat, lng: center.lng, photo: photoData, status: 'Open' };
+            allDefectsCache.push(newJob);
+            await localforage.setItem('defectsList', allDefectsCache);
+            
+            document.getElementById('addModal').style.display = 'none';
+            document.getElementById('eqName').value = ''; document.getElementById('issueDesc').value = ''; document.getElementById('photoInput').value = '';
+            loadDefects();
         }
 
-        // 7. 更新狀態成已完工
+        // 更新狀態
         window.markAsDone = async function(jobId) {
-            if (!confirm("確定將此項目標記為已完工？")) return;
-
-            try {
-                var list = await localforage.getItem('defectsList');
-                if (!list) return;
-
-                for (var i = 0; i < list.length; i++) {
-                    if (list[i].id === jobId) {
-                        list[i].status = 'Closed';
-                        break;
-                    }
-                }
-
-                await localforage.setItem('defectsList', list);
-                map.closePopup();
-                await loadDefects();
-            } catch (err) {
-                alert("更新狀態失敗: " + err.message);
+            if (!confirm("確定標記為已完工？")) return;
+            for (var i = 0; i < allDefectsCache.length; i++) {
+                if (allDefectsCache[i].id === jobId) { allDefectsCache[i].status = 'Closed'; break; }
             }
+            await localforage.setItem('defectsList', allDefectsCache);
+            map.closePopup();
+            loadDefects();
         };
 
-        // 防 XSS 字符轉義
-        function escapeHtml(str) {
-            if (!str) return '';
-            return String(str)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
+        function escapeHtml(str) { return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+        // ==========================================
+        // 匯出 (Export) / 匯入 (Import) 邏輯
+        // ==========================================
+        async function exportData() {
+            var data = await localforage.getItem('defectsList') || [];
+            var dataStr = JSON.stringify(data);
+            var blob = new Blob([dataStr], { type: 'application/json' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = 'FGD_Defects_Backup.json'; // 下載的檔案名稱
+            a.click();
+            URL.revokeObjectURL(url);
+            alert("✅ 匯出成功！檔案已儲存。");
         }
 
-        // 8. 背景定位功能 (支援手機位置實時跟蹤)
+        function importData() {
+            var fileInput = document.getElementById('importInput');
+            if (!fileInput.files || fileInput.files.length === 0) { alert("請先選擇一個 .json 檔案！"); return; }
+            if (!confirm("⚠️ 警告：匯入資料會完全覆蓋當前手機內的所有紀錄，確定繼續？")) return;
+
+            var reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    var importedData = JSON.parse(e.target.result);
+                    if (!Array.isArray(importedData)) throw new Error("檔案格式不正確");
+                    await localforage.setItem('defectsList', importedData);
+                    document.getElementById('settingsModal').style.display = 'none';
+                    loadDefects();
+                    alert("✅ 成功匯入資料！");
+                } catch (err) { alert("匯入失敗，檔案可能損毀或格式錯誤。"); }
+            };
+            reader.readAsText(fileInput.files[0]);
+        }
+
+        // ==========================================
+        // 背景定位 & 附近雷達 (LBS 偵測)
+        // ==========================================
         var userPosMarker = null;
         map.locate({ setView: false, watch: true, enableHighAccuracy: true });
+        
         map.on('locationfound', function(e) {
+            // 更新自己位置嘅藍色點
             if (!userPosMarker) {
-                userPosMarker = L.circleMarker(e.latlng, {
-                    color: '#007aff',
-                    fillColor: '#5ac8fa',
-                    fillOpacity: 0.9,
-                    radius: 7
-                }).addTo(map);
+                userPosMarker = L.circleMarker(e.latlng, { color: '#007aff', fillColor: '#5ac8fa', fillOpacity: 0.9, radius: 7 }).addTo(map);
             } else {
                 userPosMarker.setLatLng(e.latlng);
             }
+
+            // --- 附近雷達邏輯 (距離 30 米內) ---
+            var nearbyRadius = 30; // 30 米範圍
+            var nearbyJobs = [];
+
+            allDefectsCache.forEach(function(job) {
+                if (job.status === 'Open') {
+                    var jobLatLng = L.latLng(job.lat, job.lng);
+                    var distance = map.distance(e.latlng, jobLatLng); // 計算你同 Defect 嘅物理距離 (米)
+                    if (distance <= nearbyRadius) {
+                        nearbyJobs.push(job.eq + " (" + Math.round(distance) + "米)");
+                    }
+                }
+            });
+
+            // 更新 UI 提示板
+            var panel = document.getElementById('nearbyPanel');
+            var listUI = document.getElementById('nearbyList');
+            if (nearbyJobs.length > 0) {
+                panel.style.display = 'block';
+                listUI.innerHTML = '';
+                nearbyJobs.forEach(function(txt) {
+                    var li = document.createElement('li');
+                    li.innerText = txt;
+                    listUI.appendChild(li);
+                });
+            } else {
+                panel.style.display = 'none';
+            }
         });
 
-        // 啟動即載入既有項目
         loadDefects();
     </script>
 </body>
