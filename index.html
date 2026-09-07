@@ -109,7 +109,7 @@
                 let icon = job.status === 'Open' ? redIcon : greenIcon;
                 
                 // Popup HTML
-                let photoHTML = job.photo ? <img src="${job.photo}" class="popup-img"> : '';
+                let photoHTML = job.photo ? `<img src="${job.photo}" class="popup-img">`: '';
                 let actionHTML = job.status === 'Open' 
                     ? <button class="btn-close-job" onclick="window.markClosed('${job.id}')">✅ Mark as Closed (完工)</button>
                     : <b><span style="color:green;">已完工</span></b>;
